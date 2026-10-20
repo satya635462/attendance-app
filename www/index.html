@@ -78,6 +78,7 @@ function render(){
 function home(){var c=calc(),p=c.pct.toFixed(1).split("."),col=c.h&&c.pct<S.target?"var(--bad)":"var(--ok)";
  var h='<div class="hero"><div style="color:'+col+'"><span class="big">'+p[0]+'</span><span class="dec">.'+p[1]+'%</span></div>'+
  '<p class="sub">'+c.a+' attended of '+c.h+' classes</p><p class="verdict">'+esc(verdict(c))+'</p></div>';
+ if(inbox)h+='<div class="card ask"><div class="name">'+esc(inbox.t)+'</div><div class="t">'+esc(inbox.b)+'</div><button class="b" style="margin-top:10px" onclick="inbox=null;render()">Dismiss</button></div>';
  if(upd)h+='<div class="card ask"><div class="name">Update available</div><div class="t">Build '+upd+' is ready. You have build '+curBuild+'.</div><button class="b main" style="margin-top:10px" onclick="getUpdate()">Download update</button></div>';
  var pe=pending();
  if(pe)h+='<div class="card ask"><div class="name">Did you attend '+esc(pe.name)+'?</div><div class="t">'+pe.start+' to '+pe.end+'</div><div class="seg" style="margin-top:10px"><button class="b p" onclick="mark(\''+pe.id+'\',\'p\')">Attended</button><button class="b a" onclick="mark(\''+pe.id+'\',\'a\')">Missed</button><button class="b x" onclick="mark(\''+pe.id+'\',\'x\')">Cancelled</button></div></div>';
@@ -144,6 +145,10 @@ function pull(){if(!user||!window.FB)return;tok().then(function(t){return fetch(
  else if((S.updated||0)>ru)push(true);else{syncMsg="Synced";render()}}).catch(function(e){syncMsg="Sync failed: "+e.message;render()})}
 function push(now){if(!user||!window.FB)return;clearTimeout(pushT);pushT=setTimeout(function(){var body={fields:{json:{stringValue:JSON.stringify(S)},updated:{integerValue:String(S.updated||0)}}};
  tok().then(function(t){return fetch(docUrl(),{method:"PATCH",headers:{Authorization:"Bearer "+t,"Content-Type":"application/json"},body:JSON.stringify(body)})}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);syncMsg="Synced just now";if(view==="home")render()}).catch(function(e){syncMsg="Sync failed: "+e.message})},now?0:1500)}
+var inbox=null;
+function initPush(){var M=nat()&&Capacitor.Plugins.FirebaseMessaging;if(!M)return;
+ try{M.addListener("notificationReceived",function(e){var n=e.notification||{};inbox={t:n.title||"Message",b:n.body||""};if(view==="home")render()})}catch(e){}
+ M.requestPermissions().then(function(r){if(r.receive==="granted")return M.subscribeToTopic({topic:"all"})}).catch(function(){})}
 function askNotif(){try{Notification.requestPermission().then(render)}catch(e){}}
 function tick(){var n=nowHM(),d=today();
  slotsFor(d).forEach(function(s){var k=d+"|"+s.id;
@@ -152,7 +157,7 @@ function tick(){var n=nowHM(),d=today();
    if(view==="home")render()}})}
 document.querySelectorAll(".tab").forEach(function(t){t.onclick=function(){view=t.dataset.v;render()}});
 setInterval(tick,20000);document.addEventListener("visibilitychange",function(){if(!document.hidden){if(view==="home")render();tick();checkUpdate();pull()}});
-sched();render();tick();checkUpdate();initAuth();
+sched();render();tick();checkUpdate();initAuth();initPush();
 </script>
 </body>
 </html>
