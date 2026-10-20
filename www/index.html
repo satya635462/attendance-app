@@ -65,7 +65,7 @@ function calc(){var h=+S.base.held||0,a=+S.base.att||0;
 function slotsFor(d){var wd=new Date(d+"T00:00").getDay();return S.slots.filter(function(s){return s.day===wd}).sort(function(a,b){return a.start<b.start?-1:1})}
 function nowHM(){var n=new Date();return String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0")}
 function mark(id,v){var k=date+"|"+id;if(S.marks[k]===v)delete S.marks[k];else S.marks[k]=v;save();render()}
-function verdict(c){var t=S.target/100;if(!c.h)return"Mark a class or add your report to begin.";
+function verdict(c){var t=S.target/100;if(!c.h)return"Mhehe";
  if(c.pct>=S.target){var s=Math.floor(c.a/t-c.h+1e-9);return"You can miss "+s+" more class"+(s===1?"":"es")+" and stay above "+S.target+"%."}
  if(t>=1)return"Below target.";var n=Math.ceil((t*c.h-c.a)/(1-t)-1e-9);return"Attend the next "+n+" class"+(n===1?"":"es")+" to reach "+S.target+"%."}
 function pending(){if(date!==today())return null;var n=nowHM();return slotsFor(date).find(function(s){return s.end<=n&&!S.marks[date+"|"+s.id]})||null}
