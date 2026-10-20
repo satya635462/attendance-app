@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Attendance</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5d6b78;--line:#d5dce2;--ok:#1d6b58;--bad:#b3412f;--warn:#8a6a12;--on:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f161d;--card:#18222c;--ink:#e8eef3;--mute:#93a1ae;--line:#2a3846;--ok:#4cc2a1;--bad:#f08a76;--warn:#e0bd55;--on:#0f161d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f161d;--card:#18222c;--ink:#e8eef3;--mute:#93a1ae;--line:#2a3846;--ok:#4cc2a1;--bad:#f08a76;--warn:#e0bd55;--on:#0f161d;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 "Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;padding-bottom:84px}
+main{max-width:520px;margin:0 auto;padding:20px 18px}
+h2{font-size:1.1rem;font-weight:600;margin:24px 0 10px}
+.hero{text-align:center;padding:28px 0 8px}
+.big{font-size:clamp(6.5rem,36vw,11.5rem);font-weight:800;line-height:.9;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.dec{font-size:clamp(1.8rem,8vw,2.6rem);font-weight:600;color:var(--mute)}
+.sub{color:var(--mute);margin:10px 0 2px}
+.verdict{font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
+.row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.row+.row{margin-top:10px}
+.t{color:var(--mute);font-size:.9rem;font-variant-numeric:tabular-nums}
+.name{font-weight:600}
+.seg{display:flex;gap:6px}
+button,input,select{font:inherit;color:inherit}
+.b{border:1px solid var(--line);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer;min-height:40px}
+.b:focus-visible,input:focus-visible,.tab:focus-visible{outline:3px solid var(--ok);outline-offset:2px}
+.b.p.on{background:var(--ok);border-color:var(--ok);color:var(--on)}
+.b.a.on{background:var(--bad);border-color:var(--bad);color:var(--on)}
+.b.x.on{background:var(--mute);border-color:var(--mute);color:var(--on)}
+.main{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600;width:100%}
+.ask{border-color:var(--warn);border-width:2px}
+input,select{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:44px}
+label{display:block;font-size:.9rem;color:var(--mute);margin:12px 0 4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.chip{flex:0 0 auto;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 14px;cursor:pointer}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tab{flex:1;border:0;background:none;padding:15px 4px;font-weight:600;color:var(--mute);cursor:pointer}
+.tab.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--ink)}
+.empty{color:var(--mute);padding:8px 0}
+.note{color:var(--mute);font-size:.88rem}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<nav><button class="tab" data-v="home">Today</button><button class="tab" data-v="tt">Timetable</button><button class="tab" data-v="rep">Report update</button></nav>
+<script>
+var DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],ORDER=[1,2,3,4,5,6,0];
+var S={slots:[],marks:{},base:{held:0,att:0,upto:""},target:75,notified:{}};
+try{var raw=localStorage.getItem("att1");if(raw)S=Object.assign(S,JSON.parse(raw))}catch(e){}
+var view="home",ttDay=new Date().getDay(),date=today();
+function save(){try{localStorage.setItem("att1",JSON.stringify(S))}catch(e){}sched()}
+function today(){return new Date().toLocaleDateString("en-CA")}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function calc(){var h=+S.base.held||0,a=+S.base.att||0;
+ for(var k in S.marks){var p=k.split("|"),v=S.marks[k];if(p[0]>(S.base.upto||"")&&v!=="x"){h++;if(v==="p")a++}}
+ return{h:h,a:a,pct:h?a/h*100:0}}
+function slotsFor(d){var wd=new Date(d+"T00:00").getDay();return S.slots.filter(function(s){return s.day===wd}).sort(function(a,b){return a.start<b.start?-1:1})}
+function nowHM(){var n=new Date();return String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0")}
+function mark(id,v){var k=date+"|"+id;if(S.marks[k]===v)delete S.marks[k];else S.marks[k]=v;save();render()}
+function verdict(c){var t=S.target/100;if(!c.h)return"Mark a class or add your report to begin.";
+ if(c.pct>=S.target){var s=Math.floor(c.a/t-c.h+1e-9);return"You can miss "+s+" more class"+(s===1?"":"es")+" and stay above "+S.target+"%."}
+ if(t>=1)return"Below target.";var n=Math.ceil((t*c.h-c.a)/(1-t)-1e-9);return"Attend the next "+n+" class"+(n===1?"":"es")+" to reach "+S.target+"%."}
+function pending(){if(date!==today())return null;var n=nowHM();return slotsFor(date).find(function(s){return s.end<=n&&!S.marks[date+"|"+s.id]})||null}
+function render(){
+ document.querySelectorAll(".tab").forEach(function(t){t.classList.toggle("on",t.dataset.v===view)});
+ var el=document.getElementById("app");
+ if(view==="home")el.innerHTML=home();else if(view==="tt")el.innerHTML=tt();else el.innerHTML=rep();
+}
+function home(){var c=calc(),p=c.pct.toFixed(1).split("."),col=c.h&&c.pct<S.target?"var(--bad)":"var(--ok)";
+ var h='<div class="hero"><div style="color:'+col+'"><span class="big">'+p[0]+'</span><span class="dec">.'+p[1]+'%</span></div>'+
+ '<p class="sub">'+c.a+' attended of '+c.h+' classes</p><p class="verdict">'+esc(verdict(c))+'</p></div>';
+ var pe=pending();
+ if(pe)h+='<div class="card ask"><div class="name">Did you attend '+esc(pe.name)+'?</div><div class="t">'+pe.start+' to '+pe.end+'</div><div class="seg" style="margin-top:10px"><button class="b p" onclick="mark(\''+pe.id+'\',\'p\')">Attended</button><button class="b a" onclick="mark(\''+pe.id+'\',\'a\')">Missed</button><button class="b x" onclick="mark(\''+pe.id+'\',\'x\')">Cancelled</button></div></div>';
+ if("Notification" in window&&Notification.permission==="default")h+='<button class="b main" onclick="askNotif()">Turn on class reminders</button>';
+ h+='<h2>Classes on <input type="date" value="'+date+'" onchange="date=this.value||today();render()" style="width:auto;display:inline-block;min-height:36px;padding:4px 8px"></h2>';
+ var L=slotsFor(date);
+ if(!L.length)h+='<p class="empty">No classes this day. Add them in Timetable.</p>';
+ L.forEach(function(s){var v=S.marks[date+"|"+s.id];
+  h+='<div class="card"><div class="row"><div><div class="name">'+esc(s.name)+'</div><div class="t">'+s.start+' to '+s.end+'</div></div></div><div class="seg" style="margin-top:10px">'+
+  ['p:Attended','a:Missed','x:Cancelled'].map(function(o){var q=o.split(":");return'<button class="b '+q[0]+(v===q[0]?' on':'')+'" onclick="mark(\''+s.id+'\',\''+q[0]+'\')">'+q[1]+'</button>'}).join("")+'</div></div>'});
+ return h}
+function tt(){var h='<h2>Timetable</h2><div class="chips">'+ORDER.map(function(d){return'<button class="chip'+(d===ttDay?' on':'')+'" onclick="ttDay='+d+';render()">'+DAYS[d]+'</button>'}).join("")+'</div>';
+ var L=S.slots.filter(function(s){return s.day===ttDay}).sort(function(a,b){return a.start<b.start?-1:1});
+ if(!L.length)h+='<p class="empty">No classes on '+DAYS[ttDay]+' yet.</p>';
+ L.forEach(function(s){h+='<div class="card row"><div><div class="name">'+esc(s.name)+'</div><div class="t">'+s.start+' to '+s.end+'</div></div><button class="b" onclick="delSlot(\''+s.id+'\')">Delete</button></div>'});
+ h+='<h2>Add a class on '+DAYS[ttDay]+'</h2><div class="card"><label for="n">Subject</label><input id="n" placeholder="e.g. Physics">'+
+ '<div class="grid"><div><label for="s">Starts</label><input id="s" type="time" value="09:00"></div><div><label for="e">Ends</label><input id="e" type="time" value="10:00"></div></div>'+
+ '<button class="b main" style="margin-top:14px" onclick="addSlot()">Add class</button></div>'+
+ '<p class="note">You get the attendance question when a class ends.</p>';
+ return h}
+function addSlot(){var n=document.getElementById("n").value.trim(),s=document.getElementById("s").value,e=document.getElementById("e").value;
+ if(!n||!s||!e||e<=s){alert("Enter a subject and an end time after the start time.");return}
+ S.slots.push({id:"s"+Date.now(),day:ttDay,name:n,start:s,end:e});save();render()}
+function delSlot(id){S.slots=S.slots.filter(function(s){return s.id!==id});save();render()}
+function rep(){var c=calc();
+ return'<h2>Attendance report update</h2><p class="note">Copy the numbers from your latest report. The app uses them as the starting point and adds only classes you mark after that date.</p>'+
+ '<div class="card"><div class="grid"><div><label for="rh">Classes held</label><input id="rh" type="number" min="0" inputmode="numeric" value="'+(S.base.held||"")+'" oninput="prev()"></div>'+
+ '<div><label for="ra">Classes attended</label><input id="ra" type="number" min="0" inputmode="numeric" value="'+(S.base.att||"")+'" oninput="prev()"></div></div>'+
+ '<label for="ru">Report covers classes up to</label><input id="ru" type="date" value="'+(S.base.upto||"")+'">'+
+ '<label for="rt">Target attendance (%)</label><input id="rt" type="number" min="1" max="100" inputmode="numeric" value="'+S.target+'">'+
+ '<p class="verdict" id="pv"></p><button class="b main" onclick="saveRep()">Save report</button></div>'+
+ '<p class="note">Now showing '+c.a+' of '+c.h+' ('+c.pct.toFixed(1)+'%).</p>'}
+function prev(){var h=+document.getElementById("rh").value,a=+document.getElementById("ra").value,el=document.getElementById("pv");
+ el.textContent=h?(a>h?"Attended can’t be more than held.":"Report alone: "+(a/h*100).toFixed(1)+"%"):""}
+function saveRep(){var h=+document.getElementById("rh").value,a=+document.getElementById("ra").value;
+ if(a>h){alert("Attended can’t be more than held.");return}
+ S.base={held:h,att:a,upto:document.getElementById("ru").value};S.target=+document.getElementById("rt").value||75;save();view="home";render()}
+var lastSig="";
+function sched(){var LN=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.LocalNotifications;if(!LN)return;
+ var sig=JSON.stringify(S.slots);if(sig===lastSig)return;lastSig=sig;
+ LN.requestPermissions().then(function(){return LN.getPending()}).then(function(r){return r.notifications.length?LN.cancel({notifications:r.notifications}):0}).then(function(){
+  var n=S.slots.map(function(x,i){var t=x.end.split(":");return{id:i+1,title:"Did you attend "+x.name+"?",body:x.start+" to "+x.end+". Open the app to mark it.",schedule:{on:{weekday:x.day+1,hour:+t[0],minute:+t[1]},allowWhileIdle:true}}});
+  if(n.length)return LN.schedule({notifications:n})}).catch(function(e){})}
+function askNotif(){try{Notification.requestPermission().then(render)}catch(e){}}
+function tick(){var n=nowHM(),d=today();
+ slotsFor(d).forEach(function(s){var k=d+"|"+s.id;
+  if(s.end<=n&&!S.marks[k]&&!S.notified[k]){S.notified[k]=1;save();
+   try{if("Notification" in window&&Notification.permission==="granted"&&!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())){var x=new Notification("Did you attend "+s.name+"?",{body:s.start+" to "+s.end+". Open the app to mark it."});x.onclick=function(){window.focus()}}}catch(e){}
+   if(view==="home")render()}})}
+document.querySelectorAll(".tab").forEach(function(t){t.onclick=function(){view=t.dataset.v;render()}});
+setInterval(tick,20000);document.addEventListener("visibilitychange",function(){if(!document.hidden){if(view==="home")render();tick()}});
+sched();render();tick();
+</script>
+</body>
+</html>
