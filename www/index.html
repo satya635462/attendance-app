@@ -51,12 +51,13 @@ nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);b
 <body>
 <main id="app"></main>
 <nav><button class="tab" data-v="home">Today</button><button class="tab" data-v="tt">Timetable</button><button class="tab" data-v="rep">Report update</button></nav>
+<script src="fb-config.js"></script>
 <script>
 var DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],ORDER=[1,2,3,4,5,6,0];
 var S={slots:[],marks:{},base:{held:0,att:0,upto:""},target:75,notified:{}};
 try{var raw=localStorage.getItem("att1");if(raw)S=Object.assign(S,JSON.parse(raw))}catch(e){}
 var view="home",ttDay=new Date().getDay(),date=today();
-function save(){try{localStorage.setItem("att1",JSON.stringify(S))}catch(e){}sched()}
+function save(){S.updated=Date.now();try{localStorage.setItem("att1",JSON.stringify(S))}catch(e){}sched();push()}
 function today(){return new Date().toLocaleDateString("en-CA")}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function calc(){var h=+S.base.held||0,a=+S.base.att||0;
@@ -65,7 +66,7 @@ function calc(){var h=+S.base.held||0,a=+S.base.att||0;
 function slotsFor(d){var wd=new Date(d+"T00:00").getDay();return S.slots.filter(function(s){return s.day===wd}).sort(function(a,b){return a.start<b.start?-1:1})}
 function nowHM(){var n=new Date();return String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0")}
 function mark(id,v){var k=date+"|"+id;if(S.marks[k]===v)delete S.marks[k];else S.marks[k]=v;save();render()}
-function verdict(c){var t=S.target/100;if(!c.h)return"Mhehe";
+function verdict(c){var t=S.target/100;if(!c.h)return"Mark a class or add your report to begin.";
  if(c.pct>=S.target){var s=Math.floor(c.a/t-c.h+1e-9);return"You can miss "+s+" more class"+(s===1?"":"es")+" and stay above "+S.target+"%."}
  if(t>=1)return"Below target.";var n=Math.ceil((t*c.h-c.a)/(1-t)-1e-9);return"Attend the next "+n+" class"+(n===1?"":"es")+" to reach "+S.target+"%."}
 function pending(){if(date!==today())return null;var n=nowHM();return slotsFor(date).find(function(s){return s.end<=n&&!S.marks[date+"|"+s.id]})||null}
@@ -87,6 +88,7 @@ function home(){var c=calc(),p=c.pct.toFixed(1).split("."),col=c.h&&c.pct<S.targ
  L.forEach(function(s){var v=S.marks[date+"|"+s.id];
   h+='<div class="card"><div class="row"><div><div class="name">'+esc(s.name)+'</div><div class="t">'+s.start+' to '+s.end+'</div></div></div><div class="seg" style="margin-top:10px">'+
   ['p:Attended','a:Missed','x:Cancelled'].map(function(o){var q=o.split(":");return'<button class="b '+q[0]+(v===q[0]?' on':'')+'" onclick="mark(\''+s.id+'\',\''+q[0]+'\')">'+q[1]+'</button>'}).join("")+'</div></div>'});
+ if(FA()&&window.FB)h+='<div class="card" style="margin-top:24px">'+(user?'<div class="name">'+esc(user.email||user.displayName||"Signed in")+'</div><div class="t">'+esc(syncMsg||"Sync on")+'</div><button class="b" style="margin-top:10px" onclick="signOut()">Sign out</button>':'<div class="name">Sync across devices</div><div class="t">Sign in to keep your timetable and attendance on every phone.</div><button class="b main" style="margin-top:10px" onclick="signIn()">Sign in with Google</button>')+'</div>';
  if(nat())h+='<p class="note" style="text-align:center;margin-top:24px">Build '+curBuild+'</p>';
  return h}
 function tt(){var h='<h2>Timetable</h2><div class="chips">'+ORDER.map(function(d){return'<button class="chip'+(d===ttDay?' on':'')+'" onclick="ttDay='+d+';render()">'+DAYS[d]+'</button>'}).join("")+'</div>';
@@ -121,12 +123,27 @@ function sched(){var LN=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.L
  LN.requestPermissions().then(function(){return LN.getPending()}).then(function(r){return r.notifications.length?LN.cancel({notifications:r.notifications}):0}).then(function(){
   var n=S.slots.map(function(x,i){var t=x.end.split(":");return{id:i+1,title:"Did you attend "+x.name+"?",body:x.start+" to "+x.end+". Open the app to mark it.",schedule:{on:{weekday:x.day+1,hour:+t[0],minute:+t[1]},allowWhileIdle:true}}});
   if(n.length)return LN.schedule({notifications:n})}).catch(function(e){})}
-var REPO="satya635462/attendance-app",curBuild=0,upd=null;
+var REPO="YOUR_GITHUB_USERNAME/attendance-app",curBuild=0,upd=null;
 function nat(){return!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())}
 function checkUpdate(){if(!nat())return;var A=Capacitor.Plugins.App;
  (A?A.getInfo():Promise.resolve({build:"0"})).then(function(i){curBuild=+i.build||0;return fetch("https://api.github.com/repos/"+REPO+"/releases/latest")}).then(function(r){return r.json()}).then(function(r){
   var n=+String(r.tag_name||"").replace(/\D/g,"");upd=n>curBuild?n:null;if(view==="home")render()}).catch(function(){})}
 function getUpdate(){var B=Capacitor.Plugins.Browser,u="https://github.com/"+REPO+"/releases/latest/download/attendance.apk";if(B)B.open({url:u});else window.open(u,"_blank")}
+var user=null,pushT=null,syncMsg="",DEF={slots:[],marks:{},base:{held:0,att:0,upto:""},target:75,notified:{}};
+function FA(){return window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.FirebaseAuthentication}
+function docUrl(){return"https://firestore.googleapis.com/v1/projects/"+FB.projectId+"/databases/(default)/documents/users/"+user.uid}
+function tok(){return FA().getIdToken().then(function(r){return r.token})}
+function initAuth(){var A=FA();if(!A||!window.FB)return;A.getCurrentUser().then(function(r){user=r.user;if(user)pull();render()}).catch(function(){})}
+function signIn(){var A=FA();if(!A){alert("Sign-in works in the installed app.");return}
+ A.signInWithGoogle().then(function(r){user=r.user;pull();render()}).catch(function(e){alert("Sign-in failed: "+(e&&e.message||e))})}
+function signOut(){FA().signOut().then(function(){user=null;syncMsg="";render()})}
+function pull(){if(!user||!window.FB)return;tok().then(function(t){return fetch(docUrl(),{headers:{Authorization:"Bearer "+t}})}).then(function(r){if(r.status===404)return null;if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}).then(function(d){
+ if(!d){push(true);return}
+ var f=d.fields||{},ru=+((f.updated||{}).integerValue||0),rj=(f.json||{}).stringValue;
+ if(rj&&ru>(S.updated||0)){S=Object.assign({},DEF,JSON.parse(rj));S.updated=ru;try{localStorage.setItem("att1",JSON.stringify(S))}catch(e){}lastSig="";sched();syncMsg="Synced";render()}
+ else if((S.updated||0)>ru)push(true);else{syncMsg="Synced";render()}}).catch(function(e){syncMsg="Sync failed: "+e.message;render()})}
+function push(now){if(!user||!window.FB)return;clearTimeout(pushT);pushT=setTimeout(function(){var body={fields:{json:{stringValue:JSON.stringify(S)},updated:{integerValue:String(S.updated||0)}}};
+ tok().then(function(t){return fetch(docUrl(),{method:"PATCH",headers:{Authorization:"Bearer "+t,"Content-Type":"application/json"},body:JSON.stringify(body)})}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);syncMsg="Synced just now";if(view==="home")render()}).catch(function(e){syncMsg="Sync failed: "+e.message})},now?0:1500)}
 function askNotif(){try{Notification.requestPermission().then(render)}catch(e){}}
 function tick(){var n=nowHM(),d=today();
  slotsFor(d).forEach(function(s){var k=d+"|"+s.id;
@@ -134,8 +151,8 @@ function tick(){var n=nowHM(),d=today();
    try{if("Notification" in window&&Notification.permission==="granted"&&!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())){var x=new Notification("Did you attend "+s.name+"?",{body:s.start+" to "+s.end+". Open the app to mark it."});x.onclick=function(){window.focus()}}}catch(e){}
    if(view==="home")render()}})}
 document.querySelectorAll(".tab").forEach(function(t){t.onclick=function(){view=t.dataset.v;render()}});
-setInterval(tick,20000);document.addEventListener("visibilitychange",function(){if(!document.hidden){if(view==="home")render();tick();checkUpdate()}});
-sched();render();tick();checkUpdate();
+setInterval(tick,20000);document.addEventListener("visibilitychange",function(){if(!document.hidden){if(view==="home")render();tick();checkUpdate();pull()}});
+sched();render();tick();checkUpdate();initAuth();
 </script>
 </body>
 </html>
