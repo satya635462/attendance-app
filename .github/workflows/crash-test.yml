@@ -1,0 +1,35 @@
+name: Crash test
+on: workflow_dispatch
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get latest APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download --pattern attendance.apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Write test script
+        run: |
+          cat > t.sh <<'EOF'
+          APP=$(node -e "console.log(require('./capacitor.config.json').appId)")
+          adb install -r attendance.apk
+          adb logcat -c
+          adb shell monkey -p $APP -c android.intent.category.LAUNCHER 1
+          sleep 25
+          adb logcat -d > log.txt
+          EOF
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          script: bash t.sh
+      - name: Show crash
+        if: always()
+        run: grep -B3 -A30 "FATAL EXCEPTION" log.txt || tail -150 log.txt
