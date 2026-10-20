@@ -30,7 +30,7 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > release.jks
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           $BT/zipalign -p 4 android/app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
-          $BT/apksigner sign --ks release.jks --ks-alias attendance --ks-pass env:KEY_PASSWORD --key-pass env:KEY_PASSWORD --out attendance.apk aligned.apk
+          $BT/apksigner sign --ks release.jks --ks-key-alias attendance --ks-pass env:KEY_PASSWORD --key-pass env:KEY_PASSWORD --out attendance.apk aligned.apk
           $BT/apksigner verify attendance.apk
       - name: Publish release
         env:
