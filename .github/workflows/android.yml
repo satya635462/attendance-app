@@ -24,6 +24,7 @@ jobs:
           node -e "const fs=require('fs'),c=JSON.parse(fs.readFileSync('capacitor.config.json'));c.plugins=Object.assign({},c.plugins,{FirebaseAuthentication:{skipNativeAuth:false,providers:['google.com']}});fs.writeFileSync('capacitor.config.json',JSON.stringify(c,null,2))"
       - run: npx cap add android
       - run: cp google-services.json android/app/google-services.json
+            - run: sed -i "0,/^dependencies {/s//dependencies {\n    implementation 'com.google.android.gms:play-services-auth:21.2.0'/" android/app/build.gradle
       - run: sed -i 's#</manifest>#<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/></manifest>#' android/app/src/main/AndroidManifest.xml
       - run: sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" android/app/build.gradle
       - run: npx cap sync android
