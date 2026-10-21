@@ -50,7 +50,7 @@ nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);b
 </head>
 <body>
 <main id="app"></main>
-<nav><button class="tab" data-v="home">Today</button><button class="tab" data-v="tt">Timetable</button><button class="tab" data-v="rep">Report update</button></nav>
+<nav><button class="tab" data-v="home">Today</button><button class="tab" data-v="tt">Timetable</button><button class="tab" data-v="rep">Report</button></nav>
 <script src="fb-config.js"></script>
 <script>
 var DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],ORDER=[1,2,3,4,5,6,0];
@@ -75,9 +75,10 @@ function render(){
  var el=document.getElementById("app");
  if(view==="home")el.innerHTML=home();else if(view==="tt")el.innerHTML=tt();else el.innerHTML=rep();
 }
-function home(){var c=calc(),p=c.pct.toFixed(1).split("."),col=c.h&&c.pct<S.target?"var(--bad)":"var(--ok)";
+function home(){var c=calc(),w=warnCard(c),p=c.pct.toFixed(1).split("."),col=c.h&&c.pct<S.target?"var(--bad)":"var(--ok)";
  var h='<div class="hero"><div style="color:'+col+'"><span class="big">'+p[0]+'</span><span class="dec">.'+p[1]+'%</span></div>'+
- '<p class="sub">'+c.a+' attended of '+c.h+' classes</p><p class="verdict">'+esc(verdict(c))+'</p></div>';
+ '<p class="sub">'+c.a+' attended of '+c.h+' classes</p>'+(w?'':'<p class="verdict">'+esc(verdict(c))+'</p>')+'</div>';
+ h+=w;
  if(inbox)h+='<div class="card ask"><div class="name">'+esc(inbox.t)+'</div><div class="t">'+esc(inbox.b)+'</div><button class="b" style="margin-top:10px" onclick="inbox=null;render()">Dismiss</button></div>';
  if(upd)h+='<div class="card ask"><div class="name">Update available</div><div class="t">Build '+upd+' is ready. You have build '+curBuild+'.</div><button class="b main" style="margin-top:10px" onclick="getUpdate()">Download update</button></div>';
  var pe=pending();
@@ -85,6 +86,7 @@ function home(){var c=calc(),p=c.pct.toFixed(1).split("."),col=c.h&&c.pct<S.targ
  if("Notification" in window&&Notification.permission==="default")h+='<button class="b main" onclick="askNotif()">Turn on class reminders</button>';
  h+='<h2>Classes on <input type="date" value="'+date+'" onchange="date=this.value||today();render()" style="width:auto;display:inline-block;min-height:36px;padding:4px 8px"></h2>';
  var L=slotsFor(date);
+ if(L.length)h+=dayBar();
  if(!L.length)h+='<p class="empty">No classes this day. Add them in Timetable.</p>';
  L.forEach(function(s){var v=S.marks[date+"|"+s.id];
   h+='<div class="card"><div class="row"><div><div class="name">'+esc(s.name)+'</div><div class="t">'+s.start+' to '+s.end+'</div></div></div><div class="seg" style="margin-top:10px">'+
@@ -105,6 +107,15 @@ function addSlot(){var n=document.getElementById("n").value.trim(),s=document.ge
  if(!n||!s||!e||e<=s){alert("Enter a subject and an end time after the start time.");return}
  S.slots.push({id:"s"+Date.now(),day:ttDay,name:n,start:s,end:e});save();render()}
 function delSlot(id){S.slots=S.slots.filter(function(s){return s.id!==id});save();render()}
+function addDays(d,k){var x=new Date(d+"T00:00");x.setDate(x.getDate()+k);return x.toLocaleDateString("en-CA")}
+function fmtD(d){return new Date(d+"T00:00").toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}
+function reachDate(n){var cnt=0;for(var i=0;i<120;i++){var d=addDays(today(),i);if(d<=(S.base.upto||""))continue;var L=slotsFor(d);for(var j=0;j<L.length;j++){if(!S.marks[d+"|"+L[j].id])cnt++;if(cnt>=n)return d}}return null}
+function warnCard(c){if(!c.h||c.pct>=S.target)return"";var t=S.target/100,txt;
+ if(t>=1)txt="Your target is 100%, which can't be reached again after a missed class.";
+ else{var n=Math.ceil((t*c.h-c.a)/(1-t)-1e-9),r=reachDate(n);txt="Attend the next "+n+" class"+(n===1?"":"es")+" in a row to get back to "+S.target+"%."+(r?" With your timetable, that is by "+fmtD(r)+".":"")}
+ return'<div class="card" style="border:2px solid var(--bad)"><div class="name" style="color:var(--bad)">Below '+S.target+'%</div><div class="t" style="color:var(--ink);margin-top:4px">'+esc(txt)+'</div></div>'}
+function dayBar(){return'<div class="card"><div class="t" style="margin-bottom:8px">Mark the whole day</div><div class="seg" style="flex-wrap:wrap"><button class="b p" onclick="markDay(\'p\')">Whole day present</button><button class="b a" onclick="markDay(\'a\')">Whole day absent</button><button class="b x" onclick="markDay(\'x\')">Whole day cancelled</button><button class="b" onclick="markDay(\'\')">Clear</button></div></div>'}
+function markDay(v){var L=slotsFor(date);if(!L.length)return;var diff=L.some(function(s){var o=S.marks[date+"|"+s.id];return o&&o!==v});if(v&&diff&&!confirm("Some classes are already marked. Replace them?"))return;L.forEach(function(s){var k=date+"|"+s.id;if(v)S.marks[k]=v;else delete S.marks[k]});save();render()}
 function rep(){var c=calc();
  return'<h2>Attendance report update</h2><p class="note">Copy the numbers from your latest report. The app uses them as the starting point and adds only classes you mark after that date.</p>'+
  '<div class="card"><div class="grid"><div><label for="rh">Classes held</label><input id="rh" type="number" min="0" inputmode="numeric" value="'+(S.base.held||"")+'" oninput="prev()"></div>'+
