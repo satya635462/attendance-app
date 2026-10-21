@@ -60,12 +60,14 @@ var view="home",ttDay=new Date().getDay(),date=today();
 function save(){S.updated=Date.now();try{localStorage.setItem("att1",JSON.stringify(S))}catch(e){}sched();push()}
 function today(){return new Date().toLocaleDateString("en-CA")}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function W(k){return(S.mw&&S.mw[k])||1}
+function setW(k,id){var x=S.slots.filter(function(q){return q.id===id})[0];S.mw=S.mw||{};if(x&&x.lab)S.mw[k]=2;else delete S.mw[k]}
 function calc(){var h=+S.base.held||0,a=+S.base.att||0;
- for(var k in S.marks){var p=k.split("|"),v=S.marks[k];if(p[0]>(S.base.upto||"")&&v!=="x"){h++;if(v==="p")a++}}
+ for(var k in S.marks){var p=k.split("|"),v=S.marks[k];if(p[0]>(S.base.upto||"")&&v!=="x"){var w=W(k);h+=w;if(v==="p")a+=w}}
  return{h:h,a:a,pct:h?a/h*100:0}}
 function slotsFor(d){var wd=new Date(d+"T00:00").getDay();return S.slots.filter(function(s){return s.day===wd}).sort(function(a,b){return a.start<b.start?-1:1})}
 function nowHM(){var n=new Date();return String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0")}
-function mark(id,v){var k=date+"|"+id;if(S.marks[k]===v)delete S.marks[k];else S.marks[k]=v;save();render()}
+function mark(id,v){var k=date+"|"+id;if(S.marks[k]===v){delete S.marks[k];if(S.mw)delete S.mw[k]}else{S.marks[k]=v;setW(k,id)}save();render()}
 function verdict(c){var t=S.target/100;if(!c.h)return"Mark a class or add your report to begin.";
  if(c.pct>=S.target){var s=Math.floor(c.a/t-c.h+1e-9);return"You can miss "+s+" more class"+(s===1?"":"es")+" and stay above "+S.target+"%."}
  if(t>=1)return"Below target.";var n=Math.ceil((t*c.h-c.a)/(1-t)-1e-9);return"Attend the next "+n+" class"+(n===1?"":"es")+" to reach "+S.target+"%."}
@@ -89,7 +91,7 @@ function home(){var c=calc(),w=warnCard(c),p=c.pct.toFixed(1).split("."),col=c.h
  if(L.length)h+=dayBar();
  if(!L.length)h+='<p class="empty">No classes this day. Add them in Timetable.</p>';
  L.forEach(function(s){var v=S.marks[date+"|"+s.id];
-  h+='<div class="card"><div class="row"><div><div class="name">'+esc(s.name)+'</div><div class="t">'+s.start+' to '+s.end+'</div></div></div><div class="seg" style="margin-top:10px">'+
+  h+='<div class="card"><div class="row"><div><div class="name">'+esc(s.name)+'</div><div class="t">'+s.start+' to '+s.end+(s.lab?', lab (counts as 2)':'')+'</div></div></div><div class="seg" style="margin-top:10px">'+
   ['p:Attended','a:Missed','x:Cancelled'].map(function(o){var q=o.split(":");return'<button class="b '+q[0]+(v===q[0]?' on':'')+'" onclick="mark(\''+s.id+'\',\''+q[0]+'\')">'+q[1]+'</button>'}).join("")+'</div></div>'});
  if(FA()&&window.FB)h+='<div class="card" style="margin-top:24px">'+(user?'<div class="name">'+esc(user.email||user.displayName||"Signed in")+'</div><div class="t">'+esc(syncMsg||"Sync on")+'</div><button class="b" style="margin-top:10px" onclick="signOut()">Sign out</button>':'<div class="name">Sync across devices</div><div class="t">Sign in to keep your timetable and attendance on every phone.</div><button class="b main" style="margin-top:10px" onclick="signIn()">Sign in with Google</button>')+'</div>';
  if(nat())h+='<p class="note" style="text-align:center;margin-top:24px">Build '+curBuild+'</p>';
@@ -97,25 +99,25 @@ function home(){var c=calc(),w=warnCard(c),p=c.pct.toFixed(1).split("."),col=c.h
 function tt(){var h='<h2>Timetable</h2><div class="chips">'+ORDER.map(function(d){return'<button class="chip'+(d===ttDay?' on':'')+'" onclick="ttDay='+d+';render()">'+DAYS[d]+'</button>'}).join("")+'</div>';
  var L=S.slots.filter(function(s){return s.day===ttDay}).sort(function(a,b){return a.start<b.start?-1:1});
  if(!L.length)h+='<p class="empty">No classes on '+DAYS[ttDay]+' yet.</p>';
- L.forEach(function(s){h+='<div class="card row"><div><div class="name">'+esc(s.name)+'</div><div class="t">'+s.start+' to '+s.end+'</div></div><button class="b" onclick="delSlot(\''+s.id+'\')">Delete</button></div>'});
+ L.forEach(function(s){h+='<div class="card row"><div><div class="name">'+esc(s.name)+'</div><div class="t">'+s.start+' to '+s.end+(s.lab?', lab (counts as 2)':'')+'</div></div><button class="b" onclick="delSlot(\''+s.id+'\')">Delete</button></div>'});
  h+='<h2>Add a class on '+DAYS[ttDay]+'</h2><div class="card"><label for="n">Subject</label><input id="n" placeholder="e.g. Physics">'+
  '<div class="grid"><div><label for="s">Starts</label><input id="s" type="time" value="09:00"></div><div><label for="e">Ends</label><input id="e" type="time" value="10:00"></div></div>'+
- '<button class="b main" style="margin-top:14px" onclick="addSlot()">Add class</button></div>'+
+ '<label class="row" style="justify-content:flex-start;color:var(--ink);font-size:1rem;margin-top:14px"><input id="lab" type="checkbox" style="width:22px;height:22px;min-height:0"> <span>Lab session (counts as 2 hours)</span></label><button class="b main" style="margin-top:14px" onclick="addSlot()">Add class</button></div>'+
  '<p class="note">You get the attendance question when a class ends.</p>';
  return h}
 function addSlot(){var n=document.getElementById("n").value.trim(),s=document.getElementById("s").value,e=document.getElementById("e").value;
  if(!n||!s||!e||e<=s){alert("Enter a subject and an end time after the start time.");return}
- S.slots.push({id:"s"+Date.now(),day:ttDay,name:n,start:s,end:e});save();render()}
+ S.slots.push({id:"s"+Date.now(),day:ttDay,name:n,start:s,end:e,lab:document.getElementById("lab").checked});save();render()}
 function delSlot(id){S.slots=S.slots.filter(function(s){return s.id!==id});save();render()}
 function addDays(d,k){var x=new Date(d+"T00:00");x.setDate(x.getDate()+k);return x.toLocaleDateString("en-CA")}
 function fmtD(d){return new Date(d+"T00:00").toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}
-function reachDate(n){var cnt=0;for(var i=0;i<120;i++){var d=addDays(today(),i);if(d<=(S.base.upto||""))continue;var L=slotsFor(d);for(var j=0;j<L.length;j++){if(!S.marks[d+"|"+L[j].id])cnt++;if(cnt>=n)return d}}return null}
+function reachDate(n){var cnt=0;for(var i=0;i<120;i++){var d=addDays(today(),i);if(d<=(S.base.upto||""))continue;var L=slotsFor(d);for(var j=0;j<L.length;j++){if(!S.marks[d+"|"+L[j].id])cnt+=(L[j].lab?2:1);if(cnt>=n)return d}}return null}
 function warnCard(c){if(!c.h||c.pct>=S.target)return"";var t=S.target/100,txt;
  if(t>=1)txt="Your target is 100%, which can't be reached again after a missed class.";
- else{var n=Math.ceil((t*c.h-c.a)/(1-t)-1e-9),r=reachDate(n);txt="Attend the next "+n+" class"+(n===1?"":"es")+" in a row to get back to "+S.target+"%."+(r?" With your timetable, that is by "+fmtD(r)+".":"")}
+ else{var n=Math.ceil((t*c.h-c.a)/(1-t)-1e-9),r=reachDate(n);txt="Attend the next "+n+" class"+(n===1?"":"es")+" in a row to get back to "+S.target+"%."+(S.slots.some(function(x){return x.lab})?" A lab counts as 2.":"")+(r?" With your timetable, that is by "+fmtD(r)+".":"")}
  return'<div class="card" style="border:2px solid var(--bad)"><div class="name" style="color:var(--bad)">Below '+S.target+'%</div><div class="t" style="color:var(--ink);margin-top:4px">'+esc(txt)+'</div></div>'}
 function dayBar(){return'<div class="card"><div class="t" style="margin-bottom:8px">Mark the whole day</div><div class="seg" style="flex-wrap:wrap"><button class="b p" onclick="markDay(\'p\')">Whole day present</button><button class="b a" onclick="markDay(\'a\')">Whole day absent</button><button class="b x" onclick="markDay(\'x\')">Whole day cancelled</button><button class="b" onclick="markDay(\'\')">Clear</button></div></div>'}
-function markDay(v){var L=slotsFor(date);if(!L.length)return;var diff=L.some(function(s){var o=S.marks[date+"|"+s.id];return o&&o!==v});if(v&&diff&&!confirm("Some classes are already marked. Replace them?"))return;L.forEach(function(s){var k=date+"|"+s.id;if(v)S.marks[k]=v;else delete S.marks[k]});save();render()}
+function markDay(v){var L=slotsFor(date);if(!L.length)return;var diff=L.some(function(s){var o=S.marks[date+"|"+s.id];return o&&o!==v});if(v&&diff&&!confirm("Some classes are already marked. Replace them?"))return;L.forEach(function(s){var k=date+"|"+s.id;if(v){S.marks[k]=v;setW(k,s.id)}else{delete S.marks[k];if(S.mw)delete S.mw[k]}});save();render()}
 function rep(){var c=calc();
  return'<h2>Attendance report update</h2><p class="note">Copy the numbers from your latest report. The app uses them as the starting point and adds only classes you mark after that date.</p>'+
  '<div class="card"><div class="grid"><div><label for="rh">Classes held</label><input id="rh" type="number" min="0" inputmode="numeric" value="'+(S.base.held||"")+'" oninput="prev()"></div>'+
