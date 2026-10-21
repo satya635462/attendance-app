@@ -50,7 +50,7 @@ nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);b
 </head>
 <body>
 <main id="app"></main>
-<nav><button class="tab" data-v="home">Today</button><button class="tab" data-v="tt">Timetable</button><button class="tab" data-v="rep">Report</button></nav>
+<nav><button class="tab" data-v="home">Today</button><button class="tab" data-v="tt">Timetable</button><button class="tab" data-v="graph">Graph</button><button class="tab" data-v="rep">Report</button></nav>
 <script src="fb-config.js"></script>
 <script>
 var DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],ORDER=[1,2,3,4,5,6,0];
@@ -75,7 +75,7 @@ function pending(){if(date!==today())return null;var n=nowHM();return slotsFor(d
 function render(){
  document.querySelectorAll(".tab").forEach(function(t){t.classList.toggle("on",t.dataset.v===view)});
  var el=document.getElementById("app");
- if(view==="home")el.innerHTML=home();else if(view==="tt")el.innerHTML=tt();else el.innerHTML=rep();
+ if(view==="home")el.innerHTML=home();else if(view==="tt")el.innerHTML=tt();else if(view==="graph")el.innerHTML=graph();else el.innerHTML=rep();
 }
 function home(){var c=calc(),w=warnCard(c),p=c.pct.toFixed(1).split("."),col=c.h&&c.pct<S.target?"var(--bad)":"var(--ok)";
  var h='<div class="hero"><div style="color:'+col+'"><span class="big">'+p[0]+'</span><span class="dec">.'+p[1]+'%</span></div>'+
@@ -118,6 +118,34 @@ function warnCard(c){if(!c.h||c.pct>=S.target)return"";var t=S.target/100,txt;
  return'<div class="card" style="border:2px solid var(--bad)"><div class="name" style="color:var(--bad)">Below '+S.target+'%</div><div class="t" style="color:var(--ink);margin-top:4px">'+esc(txt)+'</div></div>'}
 function dayBar(){return'<div class="card"><div class="t" style="margin-bottom:8px">Mark the whole day</div><div class="seg" style="flex-wrap:wrap"><button class="b p" onclick="markDay(\'p\')">Whole day present</button><button class="b a" onclick="markDay(\'a\')">Whole day absent</button><button class="b x" onclick="markDay(\'x\')">Whole day cancelled</button><button class="b" onclick="markDay(\'\')">Clear</button></div></div>'}
 function markDay(v){var L=slotsFor(date);if(!L.length)return;var diff=L.some(function(s){var o=S.marks[date+"|"+s.id];return o&&o!==v});if(v&&diff&&!confirm("Some classes are already marked. Replace them?"))return;L.forEach(function(s){var k=date+"|"+s.id;if(v){S.marks[k]=v;setW(k,s.id)}else{delete S.marks[k];if(S.mw)delete S.mw[k]}});save();render()}
+function lastOcc(sl){for(var i=0;i<8;i++){var d=addDays(today(),-i);if(new Date(d+"T00:00").getDay()===sl.day&&(i>0||nowHM()>=sl.end))return d}return today()}
+function answer(id,v){var sl=S.slots.filter(function(q){return q.id===id})[0];if(!sl)return;var d=lastOcc(sl),k=d+"|"+id;S.marks[k]=v;setW(k,id);save();
+ inbox={t:"Marked "+sl.name,b:fmtD(d)+": "+({p:"Attended",a:"Missed",x:"Cancelled"})[v]};view="home";render()}
+function initNotif(){var LN=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.LocalNotifications;if(!LN)return;
+ try{LN.addListener("localNotificationActionPerformed",function(e){var v=e.actionId,x=e.notification&&e.notification.extra&&e.notification.extra.slot;if((v==="p"||v==="a"||v==="x")&&x)answer(x,v)})}catch(err){}}
+var G={all:false};
+function fmtS(d){return d==="Start"?"Start":new Date(d+"T00:00").toLocaleDateString(undefined,{day:"numeric",month:"short"})}
+function series(){var upto=S.base.upto||"",h=+S.base.held||0,a=+S.base.att||0,by={},pts=[];
+ for(var k in S.marks){var p=k.split("|"),v=S.marks[k];if(p[0]>upto&&v!=="x"){var w=W(k),o=by[p[0]]||(by[p[0]]={h:0,a:0});o.h+=w;if(v==="p")o.a+=w}}
+ if(h>0)pts.push({d:upto||"Start",p:a/h*100,rep:true});
+ Object.keys(by).sort().forEach(function(d){h+=by[d].h;a+=by[d].a;pts.push({d:d,p:h?a/h*100:0,dh:by[d].h,da:by[d].a})});return pts}
+function graph(){var all=series(),cut=addDays(today(),-30),pts=G.all?all:all.filter(function(x){return x.d>=cut});if(!G.all&&pts.length<2)pts=all;
+ var h='<h2>Attendance record</h2><div class="chips"><button class="chip'+(G.all?'':' on')+'" onclick="G.all=false;render()">Last 30 days</button><button class="chip'+(G.all?' on':'')+'" onclick="G.all=true;render()">All time</button></div>';
+ if(pts.length<2)return h+'<p class="empty">Your graph appears once you have marked classes on at least two days, or entered a report and marked one day.</p>';
+ var w=340,ht=210,l=36,r=14,t=16,b=28,lo=Math.min.apply(null,pts.map(function(x){return x.p}).concat([S.target])),y0=Math.max(0,Math.floor((lo-5)/10)*10),y1=100,st=(y1-y0)>50?20:10;
+ function X(i){return l+i*(w-l-r)/(pts.length-1)}
+ function Y(v){return t+(y1-v)*(ht-t-b)/(y1-y0)}
+ var g='';for(var v=y0;v<=y1;v+=st)g+='<line x1="'+l+'" x2="'+(w-r)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" style="stroke:var(--line)"/><text x="'+(l-6)+'" y="'+(Y(v)+3)+'" text-anchor="end" style="fill:var(--mute);font-size:10px">'+v+'</text>';
+ var last=pts[pts.length-1],col=last.p>=S.target?"var(--ok)":"var(--bad)",line=pts.map(function(x,i){return X(i)+","+Y(x.p)}).join(" "),
+ dots=pts.length<=40?pts.map(function(x,i){return'<circle cx="'+X(i)+'" cy="'+Y(x.p)+'" r="3" style="fill:'+col+'"/>'}).join(""):"";
+ var svg='<svg viewBox="0 0 '+w+' '+ht+'" role="img" aria-label="Line chart of your attendance percentage over time" style="width:100%;height:auto;display:block">'+g+
+ '<line x1="'+l+'" x2="'+(w-r)+'" y1="'+Y(S.target)+'" y2="'+Y(S.target)+'" stroke-dasharray="5 4" style="stroke:var(--warn);stroke-width:1.5"/>'+
+ '<polyline points="'+line+'" fill="none" style="stroke:'+col+';stroke-width:2.5;stroke-linejoin:round"/>'+dots+
+ '<text x="'+(w-r)+'" y="'+(Y(last.p)-9)+'" text-anchor="end" style="fill:'+col+';font-size:12px;font-weight:600">'+last.p.toFixed(1)+'%</text>'+
+ '<text x="'+l+'" y="'+(ht-8)+'" style="fill:var(--mute);font-size:10px">'+fmtS(pts[0].d)+'</text><text x="'+(w-r)+'" y="'+(ht-8)+'" text-anchor="end" style="fill:var(--mute);font-size:10px">'+fmtS(last.d)+'</text></svg>';
+ h+='<div class="card">'+svg+'<p class="note" style="margin:6px 0 0">Dashed line: your '+S.target+'% target. Each point is your running total after that day.</p></div>';
+ var rows=pts.filter(function(x){return!x.rep}).reverse().slice(0,30);
+ return h+'<h2>By day</h2><div class="card">'+rows.map(function(x){return'<div class="row"><span>'+esc(fmtD(x.d))+'</span><span class="t">'+x.da+' of '+x.dh+' attended</span><b>'+x.p.toFixed(1)+'%</b></div>'}).join("")+'</div>'}
 function rep(){var c=calc();
  return'<h2>Attendance report update</h2><p class="note">Copy the numbers from your latest report. The app uses them as the starting point and adds only classes you mark after that date.</p>'+
  '<div class="card"><div class="grid"><div><label for="rh">Classes held</label><input id="rh" type="number" min="0" inputmode="numeric" value="'+(S.base.held||"")+'" oninput="prev()"></div>'+
@@ -134,8 +162,8 @@ function saveRep(){var h=+document.getElementById("rh").value,a=+document.getEle
 var lastSig="";
 function sched(){var LN=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.LocalNotifications;if(!LN)return;
  var sig=JSON.stringify(S.slots);if(sig===lastSig)return;lastSig=sig;
- LN.requestPermissions().then(function(){return LN.getPending()}).then(function(r){return r.notifications.length?LN.cancel({notifications:r.notifications}):0}).then(function(){
-  var n=S.slots.map(function(x,i){var t=x.end.split(":");return{id:i+1,title:"Did you attend "+x.name+"?",body:x.start+" to "+x.end+". Open the app to mark it.",schedule:{on:{weekday:x.day+1,hour:+t[0],minute:+t[1]},allowWhileIdle:true}}});
+ LN.registerActionTypes({types:[{id:"ATTEND",actions:[{id:"p",title:"Attended"},{id:"a",title:"Missed"},{id:"x",title:"Cancelled"}]}]}).catch(function(){}).then(function(){return LN.requestPermissions()}).then(function(){return LN.getPending()}).then(function(r){return r.notifications.length?LN.cancel({notifications:r.notifications}):0}).then(function(){
+  var n=S.slots.map(function(x,i){var t=x.end.split(":");return{id:i+1,title:"Did you attend "+x.name+"?",body:x.start+" to "+x.end+". Tap an answer below.",actionTypeId:"ATTEND",extra:{slot:x.id},schedule:{on:{weekday:x.day+1,hour:+t[0],minute:+t[1]},allowWhileIdle:true}}});
   if(n.length)return LN.schedule({notifications:n})}).catch(function(e){})}
 var REPO="YOUR_GITHUB_USERNAME/attendance-app",curBuild=0,upd=null;
 function nat(){return!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())}
@@ -170,7 +198,7 @@ function tick(){var n=nowHM(),d=today();
    if(view==="home")render()}})}
 document.querySelectorAll(".tab").forEach(function(t){t.onclick=function(){view=t.dataset.v;render()}});
 setInterval(tick,20000);document.addEventListener("visibilitychange",function(){if(!document.hidden){if(view==="home")render();tick();checkUpdate();pull()}});
-sched();render();tick();checkUpdate();initAuth();initPush();
+initNotif();sched();render();tick();checkUpdate();initAuth();initPush();
 </script>
 </body>
 </html>
